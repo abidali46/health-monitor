@@ -1,0 +1,90 @@
+services:
+  # ---------------------------------------------------------------------------
+  # 1. PostgreSQL Database Service
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: health-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-health_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-monitor_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_to_a_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-monitor_user} -d ${POSTGRES_DB:-health_monitor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - monitor-net
+    # Note: Host ports are intentionally NOT exposed to maintain network isolation
+
+  # ---------------------------------------------------------------------------
+  # 2. Python System Health Collector Service
+  # ---------------------------------------------------------------------------
+  collector:
+    build:
+      context: ./collector
+      dockerfile: Dockerfile
+    container_name: health-collector
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-health_monitor}
+      DB_USER: ${POSTGRES_USER:-monitor_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-change_this_to_a_secure_password}
+      COLLECTION_INTERVAL: ${COLLECTION_INTERVAL:-30}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - monitor-net
+    # Note: Runs as non-root user (appuser); no host ports exposed
+
+  # ---------------------------------------------------------------------------
+  # 3. Grafana Visualization Dashboard Service
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: health-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Environment variables for datasource interpolation
+      POSTGRES_DB: ${POSTGRES_DB:-health_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-monitor_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_to_a_secure_password}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - monitor-net
+
+# -----------------------------------------------------------------------------
+# Isolated Custom Bridge Network
+# -----------------------------------------------------------------------------
+networks:
+  monitor-net:
+    name: monitor-net
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Persistent Named Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    name: postgres_data
+  grafana_data:
+    name: grafana_data
