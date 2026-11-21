@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code
-COPY health_check.py database.py .
+COPY health_check.py database.py ./
 
 # Ensure appuser owns the application files
 RUN chown -R appuser:appuser /app
