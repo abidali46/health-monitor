@@ -70,7 +70,8 @@ Host / Browser (Windows or Ubuntu VM)
 ├── README.md                                # Comprehensive documentation
 ├── collector/
 │   ├── Dockerfile                           # Container definition for collector (non-root)
-│   ├── health_check.py                      # Metrics collector and database writer
+│   ├── database.py                          # PostgreSQL connection, schema, and queries
+│   ├── health_check.py                      # Metrics collector and monitoring loop
 │   └── requirements.txt                     # Pinned Python dependencies
 └── grafana/
     ├── dashboards/
